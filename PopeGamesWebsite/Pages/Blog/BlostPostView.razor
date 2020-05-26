@@ -1,0 +1,64 @@
+﻿@page "/blog/blogpost/{postId}"
+@layout BlogLayout
+@inject HttpClient Http
+@using Markdig
+@using Markdig.SyntaxHighlighting
+
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <BlogPostHeader Heading=@_blogPost.Title Author=@_blogPost.Author PostedDate=@_blogPost.Posted></BlogPostHeader>
+    </Authorized>
+    <NotAuthorized>
+        @if (_blogPost.Publish)
+        {
+        <BlogPostHeader Heading=@_blogPost.Title Author=@_blogPost.Author PostedDate=@_blogPost.Posted></BlogPostHeader>
+        } else {
+        <BlogPostHeader Heading="Not Authorised" Author=@_blogPost.Author></BlogPostHeader>
+        }
+    </NotAuthorized>
+</AuthorizeView>
+
+<br />
+<article>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-md-auto mx-auto">
+                <AuthorizeView Roles="Admin">
+                    <Authorized>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <NavLink class="btn btn-primary float-right" href="@($"/blog/editpost/{_blogPost.Id}")">Edit</NavLink>
+                            </div>
+                        </div>
+                        @((MarkupString)_blogPost.Post)
+                    </Authorized>
+                    <NotAuthorized>
+                        @if (_blogPost.Publish)
+                        {
+                        @((MarkupString)_blogPost.Post)
+                        }
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </div>
+</article>
+
+@code {
+    [Parameter] public string PostId { get; set; }
+
+    protected BlogPost _blogPost { get; set; } = new BlogPost();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBlogPost();
+    }
+
+    private async Task LoadBlogPost()
+    {
+        _blogPost = await Http.GetJsonAsync<BlogPost>(Urls.BlogPost.Replace("{id}", PostId));
+        var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().UseSyntaxHighlighting().UseEmojiAndSmiley().Build();
+        _blogPost.Post = Markdown.ToHtml(_blogPost.Post, pipeline);
+    }
+}

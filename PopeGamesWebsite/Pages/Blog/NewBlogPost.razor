@@ -1,0 +1,124 @@
+﻿@page "/blog/newpost"
+@page "/blog/editpost/{PostId}"
+@layout BlogLayout
+@inject HttpClient Http
+@inject NavigationManager NavigationManager
+@using System.Net.Http
+
+@attribute [Authorize(Policy = "RequireAdmin")]
+
+<BlogPostHeader Heading="CPope Blog" SubHeading=@(IsEdit ? "Edit Post" : "AddPost") />
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-auto">
+            <div class="editor">
+                <input @bind=@blogPost.Title placeholder="Title" class="form-control" />
+                <InputFile OnChange="HandleSelection" />
+                <p>@status</p>
+                <button class="btn btn-primary float-right" @onclick="@DeletePost">Delete</button>
+                <button class="btn btn-primary float-right" @onclick="@UpdatePost">Save</button>
+                <label class="float-right">Publish</label>
+                <input type="checkbox" class="float-right" @bind=@blogPost.Publish />
+                <textarea @bind=@blogPost.Post placeholder="Write your post (Supports Markdown)" rows="20" class="form-control"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string PostId { get; set; }
+
+    protected int CharacterCount { get; set; }
+    protected BlogPost blogPost { get; set; } = new BlogPost();
+    protected bool IsEdit => string.IsNullOrEmpty(PostId) ? false : true;
+
+    string status;
+
+    async Task HandleSelection(IFileListEntry[] files)
+    {
+        status = "Please wait...";
+
+        var file = files.FirstOrDefault();
+        if (file != null)
+        {
+            var ms = new MemoryStream();
+            await file.Data.CopyToAsync(ms);
+
+            var content = new MultipartFormDataContent {
+                { new ByteArrayContent(ms.GetBuffer()), "\"" + Urls.UploadImage + "\"", file.Name }
+            };
+            await Http.PostAsync(Urls.UploadImage, content);
+            status = "Uploaded! Available at: ../images/" + file.Name;
+        }
+    }
+
+    static AutoSave autoSave;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if(autoSave != null) 
+        {
+            autoSave.Dispose();
+            autoSave = null;
+        }
+
+        autoSave = new AutoSave();
+        autoSave.autoSave += async () => { await AutoSavePost(); };
+
+        if (!string.IsNullOrEmpty(PostId))
+        {
+            await LoadPost();
+        } else
+        {
+            await SavePost();
+        }
+    }
+
+    public async Task SavePost()
+    {
+        var newPost = new BlogPost()
+        {
+            Title = "Title",
+            Author = "Chandler Pope-Lewis",
+            Post = "",
+            Posted = DateTime.UtcNow,
+            Publish = false
+        };
+
+        blogPost = await Http.PostJsonAsync<BlogPost>(Urls.PostBlogPost, newPost);
+    }
+
+    public async Task AutoSavePost()
+    {
+        if (NavigationManager.Uri.Contains("newpost") || NavigationManager.Uri.Contains("editpost"))
+            await Http.PutJsonAsync(Urls.UpdateBlogPost.Replace("{id}", blogPost.Id.ToString()), blogPost);
+        else
+        {
+            autoSave.Dispose();
+            autoSave = null;
+        }
+    }
+
+    public async Task UpdatePost()
+    {
+        await Http.PutJsonAsync(Urls.UpdateBlogPost.Replace("{id}", blogPost.Id.ToString()), blogPost);
+        autoSave.Dispose();
+
+        NavigationManager.NavigateTo($"blog/blogpost/{blogPost.Id}");
+    }
+
+    private async Task LoadPost()
+    {
+        blogPost = await Http.GetJsonAsync<BlogPost>(Urls.BlogPost.Replace("{id}", PostId));
+        CharacterCount = blogPost.Post.Length;
+    }
+
+    public async Task DeletePost()
+    {
+        await Http.DeleteAsync(Urls.DeleteBlogPost.Replace("{id}", blogPost.Id.ToString()));
+        autoSave.Dispose();
+
+        NavigationManager.NavigateTo("/blog/");
+    }
+}

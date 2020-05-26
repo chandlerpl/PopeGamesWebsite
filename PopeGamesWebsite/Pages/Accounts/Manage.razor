@@ -1,0 +1,72 @@
+﻿@page "/account/manage"
+@inject UserManager<IdentityUser> userManager
+@inject NavigationManager navigationManager
+<div class="container">
+    <h1 class="title">Register</h1>
+
+    <EditForm Model="@registerAccountModel" OnValidSubmit="@RegisterUser">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="field">
+            <label class="label">Username</label>
+            <div class="control">
+                <InputText name="username" id="username" class="input" type="username" @bind-Value="@registerAccountModel.Username"></InputText>
+            </div>
+        </div>
+        <div class="field">
+            <label class="label">E-mail</label>
+            <div class="control">
+                <InputText name="email" id="email" class="input" type="email" @bind-Value="@registerAccountModel.Email"></InputText>
+            </div>
+        </div>
+        <div class="field">
+            <label class="label">Password</label>
+            <div class="control">
+                <InputText id="password" class="input" type="password" @bind-Value="@registerAccountModel.Password"></InputText>
+            </div>
+        </div>
+        <div class="field">
+            <label class="label">Confirm password</label>
+            <div class="control">
+                <InputText id="cpassword" class="input" type="password" @bind-Value="@registerAccountModel.ConfirmPassword"></InputText>
+            </div>
+        </div>
+        <div class="field">
+            <div class="control">
+                <button type="submit" class="button is-primary">Register</button>
+            </div>
+        </div>
+    </EditForm>
+</div>
+@code {
+
+    private RegisterAccountModel registerAccountModel = new RegisterAccountModel();
+
+    private async Task RegisterUser()
+    {
+        IdentityUser user = new IdentityUser { UserName = registerAccountModel.Username, Email = registerAccountModel.Email, EmailConfirmed = false };
+        var result = await userManager.CreateAsync(user, registerAccountModel.Password);
+        var confirmationCode = await userManager.GenerateEmailConfirmationTokenAsync(user);
+        await userManager.ConfirmEmailAsync(user, confirmationCode);
+
+        if (result.Succeeded)
+        {
+            navigationManager.NavigateTo("account/signin");
+            return;
+        }
+    }
+
+    public class RegisterAccountModel
+    {
+        [Required]
+        public string Username { get; set; }
+        [Required]
+        public string Email { get; set; }
+        [Required]
+        public string Password { get; set; }
+        [Required]
+        [Compare(nameof(Password))]
+        public string ConfirmPassword { get; set; }
+    }
+}
